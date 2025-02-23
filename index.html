@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Translator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="header">
+                <div class="logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
+                        <path d="m5 8 6 6"/>
+                        <path d="m4 14 6-6 2-3"/>
+                        <path d="M2 5h12"/>
+                        <path d="M7 2h1"/>
+                        <path d="m22 22-5-10-5 10"/>
+                        <path d="M14 18h6"/>
+                    </svg>
+                    <h1>Audio Translator</h1>
+                </div>
+            </div>
+
+            <form class="translation-form" id="translationForm">
+                <div class="upload-area" id="uploadArea">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="upload-icon">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <p>Click to upload or drag and drop</p>
+                    <span class="file-info" id="fileInfo">Supports MP3, WAV, M4A (max 10MB)</span>
+                    <input type="file" id="fileInput" accept="audio/*" class="file-input">
+                </div>
+
+                <div class="language-select">
+                    <label for="language">Target Language</label>
+                    <select id="language" required>
+                        <!-- Languages supported by AWS Translate -->
+                        <option value="ar">Arabic</option>
+                        <option value="zh">Chinese (Simplified)</option>
+                        <option value="zh-TW">Chinese (Traditional)</option>
+                        <option value="cs">Czech</option>
+                        <option value="da">Danish</option>
+                        <option value="nl">Dutch</option>
+                        <option value="en">English</option>
+                        <option value="fi">Finnish</option>
+                        <option value="fr">French</option>
+                        <option value="de">German</option>
+                        <option value="he">Hebrew</option>
+                        <option value="hi">Hindi</option>
+                        <option value="id">Indonesian</option>
+                        <option value="it">Italian</option>
+                        <option value="ja">Japanese</option>
+                        <option value="ko">Korean</option>
+                        <option value="ms">Malay</option>
+                        <option value="no">Norwegian</option>
+                        <option value="fa">Persian</option>
+                        <option value="pl">Polish</option>
+                        <option value="pt">Portuguese</option>
+                        <option value="ru">Russian</option>
+                        <option value="es">Spanish</option>
+                        <option value="sv">Swedish</option>
+                        <option value="tr">Turkish</option>
+                        <option value="uk">Ukrainian</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="translate-button">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                    </svg>
+                    Translate Audio
+                </button>
+            </form>
+
+            <!-- Result Section -->
+            <div class="result-audio" id="resultAudio" style="display: none;">
+                <p>Translated Audio:</p>
+                <audio id="translatedAudio" controls></audio>
+            </div>
+        </div>
+
+        <p class="footer-text">
+            Upload your audio file and select the target language. We'll translate it for you.
+        </p>
+    </div>
+
+    <script>
+        // API Gateway Invoke URL
+        const API_GATEWAY_URL = "https://vtwmbyt4l2.execute-api.us-east-1.amazonaws.com/prod";
+
+        // DOM Elements
+        const uploadArea = document.getElementById("uploadArea");
+        const fileInput = document.getElementById("fileInput");
+        const fileInfo = document.getElementById("fileInfo");
+        const translationForm = document.getElementById("translationForm");
+        const resultAudio = document.getElementById("resultAudio");
+        const translatedAudio = document.getElementById("translatedAudio");
+
+        // Handle file selection
+        fileInput.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                fileInfo.textContent = file.name;
+            }
+        });
+
+        // Handle drag and drop
+        uploadArea.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            uploadArea.classList.add("dragover");
+        });
+
+        uploadArea.addEventListener("dragleave", () => {
+            uploadArea.classList.remove("dragover");
+        });
+
+        uploadArea.addEventListener("drop", (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove("dragover");
+            const file = e.dataTransfer.files[0];
+            if (file) {
+                fileInput.files = e.dataTransfer.files;
+                fileInfo.textContent = file.name;
+            }
+        });
+
+        // Handle form submission
+        translationForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const file = fileInput.files[0];
+            const language = document.getElementById("language").value;
+
+            if (!file) {
+                alert("Please select an audio file.");
+                return;
+            }
+
+            // Read the file as a base64-encoded string
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const base64Audio = event.target.result.split(",")[1];
+
+                try {
+                    // Send the file to the API Gateway
+                    const response = await fetch(API_GATEWAY_URL, {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            file_name: file.name,
+                            file_content: base64Audio,
+                            target_language: language,
+                        }),
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Failed to translate audio.");
+                    }
+
+                    const data = await response.json();
+
+                    // Display the translated audio
+                    translatedAudio.src = data.translated_audio_url;
+                    resultAudio.style.display = "block";
+                } catch (error) {
+                    console.error(error);
+                    alert("An error occurred. Please try again.");
+                }
+            };
+            reader.readAsDataURL(file);
+        });
+    </script>
+</body>
+</html>
